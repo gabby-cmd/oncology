@@ -1,98 +1,96 @@
 import streamlit as st
+import pandas as pd
 import requests
-from bs4 import BeautifulSoup
+import matplotlib.pyplot as plt
 
-# Function to scrape inclusion and exclusion criteria from clinicaltrials.gov
-def fetch_criteria(nct_id):
-    url = f"https://clinicaltrials.gov/ct2/show/{nct_id}?term={nct_id}&rank=1"
+# Function to fetch inclusion/exclusion criteria from clinicaltrials.gov API
+def fetch_trial_criteria(nct_id):
+    # Construct API URL
+    url = f'https://api.clinicaltrials.gov/v1/studies/{nct_id}'
+    
+    # Send GET request to fetch data
     response = requests.get(url)
-
-    if response.status_code != 200:
-        st.error(f"Failed to retrieve data for NCT ID: {nct_id}. Please check the ID and try again.")
+    
+    if response.status_code == 200:
+        trial_data = response.json()
+        inclusion_criteria = trial_data.get('inclusionCriteria', 'No inclusion criteria found')
+        exclusion_criteria = trial_data.get('exclusionCriteria', 'No exclusion criteria found')
+        return inclusion_criteria, exclusion_criteria
+    else:
         return None, None
-    
-    soup = BeautifulSoup(response.content, "html.parser")
-    
-    # Scrape Inclusion and Exclusion Criteria (located under <div class="inclusion"> and <div class="exclusion">)
-    inclusion_criteria = []
-    exclusion_criteria = []
 
-    # Try to find inclusion criteria
-    inclusion_section = soup.find("div", {"class": "inclusion"})
-    if inclusion_section:
-        for li in inclusion_section.find_all("li"):
-            inclusion_criteria.append(li.get_text(strip=True))
-    else:
-        st.warning("No inclusion criteria found for this trial.")
+# Function to check if the patient's data matches inclusion/exclusion criteria
+def check_inclusion_exclusion(patient_data, criteria_data):
+    inclusion_count = 0
+    exclusion_count = 0
+    total_trials = len(criteria_data)
 
-    # Try to find exclusion criteria
-    exclusion_section = soup.find("div", {"class": "exclusion"})
-    if exclusion_section:
-        for li in exclusion_section.find_all("li"):
-            exclusion_criteria.append(li.get_text(strip=True))
-    else:
-        st.warning("No exclusion criteria found for this trial.")
+    # Loop through each patient and compare with trial criteria
+    for _, patient_row in patient_data.iterrows():
+        for _, criteria_row in criteria_data.iterrows():
+            nct_id = criteria_row['NCT ID']
+            inclusion_criteria, exclusion_criteria = fetch_trial_criteria(nct_id)
+            
+            if inclusion_criteria and exclusion_criteria:
+                # Combine inclusion and exclusion criteria
+                patient_diag = patient_row['Primarydiag'] + " " + str(patient_row['SecondaryDiag'])
+                
+                # Inclusion check
+                if any(keyword.lower() in patient_diag.lower() for keyword in inclusion_criteria.split(";")):
+                    inclusion_count += 1
 
-    return inclusion_criteria, exclusion_criteria
+                # Exclusion check
+                if any(keyword.lower() in patient_diag.lower() for keyword in exclusion_criteria.split(";")):
+                    exclusion_count += 1
 
-# Function to check eligibility based on patient data and criteria
-def check_eligibility(patient_data, inclusion_criteria, exclusion_criteria):
-    inclusion_matches = 0
-    exclusion_matches = 0
-
-    # Check for Inclusion Criteria
-    for criterion in inclusion_criteria:
-        if criterion.lower() in patient_data.lower():
-            inclusion_matches += 1
-
-    # Check for Exclusion Criteria
-    for criterion in exclusion_criteria:
-        if criterion.lower() in patient_data.lower():
-            exclusion_matches += 1
-
-    # Calculate percentages
-    inclusion_percentage = (inclusion_matches / len(inclusion_criteria)) * 100 if inclusion_criteria else 0
-    exclusion_percentage = (exclusion_matches / len(exclusion_criteria)) * 100 if exclusion_criteria else 0
-
-    # Determine eligibility
-    if exclusion_matches > 0:
-        result = "Exclusion"
-    else:
-        result = "Inclusion"
-    
-    return result, inclusion_percentage, exclusion_percentage
+    inclusion_percentage = (inclusion_count / total_trials) * 100 if total_trials else 0
+    exclusion_percentage = (exclusion_count / total_trials) * 100 if total_trials else 0
+    return inclusion_percentage, exclusion_percentage
 
 # Streamlit UI
-st.title('Clinical Trial Eligibility Check')
+st.title("Patient Eligibility for Clinical Trials")
 
-# Input for the NCT ID and patient data
-nct_id = st.text_input('Enter NCT ID of Clinical Trial')
+# File Uploads
+sample_data = st.file_uploader("Upload the sample data CSV", type=["csv"])
+master_file = st.file_uploader("Upload the master file CSV", type=["csv"])
 
-# Refining patient input fields
-patient_name = st.text_input('Enter Patient Name')
-patient_age = st.number_input('Enter Patient Age', min_value=0, max_value=120, value=30)
-patient_gender = st.selectbox('Select Patient Gender', ['Male', 'Female', 'Other'])
-patient_medical_conditions = st.text_area('Enter Patient Medical Conditions (e.g., Diabetes, Hypertension, etc.)')
+if sample_data and master_file:
+    # Load CSV files
+    patient_data = pd.read_csv(sample_data)
+    criteria_data = pd.read_csv(master_file)
 
-# Ensure all fields are filled in before proceeding
-if st.button('Check Eligibility'):
-    if nct_id and patient_name and patient_age and patient_gender and patient_medical_conditions:
-        # Fetch inclusion/exclusion criteria for the provided NCT ID
-        inclusion_criteria, exclusion_criteria = fetch_criteria(nct_id)
+    st.write("Sample Data:")
+    st.dataframe(patient_data.head())
+
+    st.write("Master File Data (Clinical Trial Criteria):")
+    st.dataframe(criteria_data.head())
+
+    # Input patient name for selection
+    patient_name = st.text_input("Enter Patient Name to check eligibility:")
+
+    if patient_name:
+        # Filter data based on patient name
+        selected_patient = patient_data[patient_data['Patient'].str.contains(patient_name, case=False, na=False)]
         
-        if inclusion_criteria is not None and exclusion_criteria is not None:
-            # Process patient data (combine structured fields for matching)
-            patient_data = f"Age: {patient_age}, Gender: {patient_gender}, Conditions: {patient_medical_conditions}"
-            
-            # Check eligibility based on inclusion/exclusion criteria
-            result, inclusion_percentage, exclusion_percentage = check_eligibility(patient_data, inclusion_criteria, exclusion_criteria)
-            
-            # Display results
-            st.subheader(f"Patient: {patient_name}")
-            st.write(f"Eligibility: {result}")
-            st.write(f"Inclusion Criteria Match: {inclusion_percentage:.2f}%")
-            st.write(f"Exclusion Criteria Match: {exclusion_percentage:.2f}%")
+        if not selected_patient.empty:
+            st.write(f"Selected Patient: {patient_name}")
+            st.write(selected_patient)
+
+            # Analyze eligibility based on clinicaltrials.gov inclusion/exclusion criteria
+            inclusion_percentage, exclusion_percentage = check_inclusion_exclusion(selected_patient, criteria_data)
+
+            # Display Results
+            st.write(f"Inclusion Percentage: {inclusion_percentage:.2f}%")
+            st.write(f"Exclusion Percentage: {exclusion_percentage:.2f}%")
+
+            # Show Results in a Chart
+            labels = ['Inclusion', 'Exclusion']
+            values = [inclusion_percentage, exclusion_percentage]
+
+            fig, ax = plt.subplots()
+            ax.pie(values, labels=labels, autopct='%1.1f%%', startangle=90)
+            ax.axis('equal')  # Equal aspect ratio ensures the pie chart is circular.
+            st.pyplot(fig)
+
         else:
-            st.error("Failed to retrieve inclusion/exclusion criteria from clinicaltrials.gov.")
-    else:
-        st.error("Please fill in all fields.")
+            st.warning("Patient not found in the sample data.")
