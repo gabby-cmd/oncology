@@ -1,89 +1,60 @@
 import streamlit as st
 import pandas as pd
 
-def check_eligibility(patient_data):
-    """
-    Check patient eligibility based on adapted criteria:
-      - Inclusion criteria:
-          1. Primary diagnosis should indicate type 1 diabetes.
-          2. Prescription should mention CSII usage (e.g., "insulin pump" or "csii").
-          3. Prescription should indicate use of a closed-loop device (e.g., "closed-loop" or "closed loop").
-      - Exclusion criteria:
-          1. Presence of "pregnancy" in either the diagnosis or prescription.
-    """
-    criteria = {}
-    
-    # Inclusion checks:
-    primary_diag = patient_data.get("Primarydiag", "").lower()
-    prescription = patient_data.get("Prescription", "").lower()
-    
-    # 1. Check if primary diagnosis indicates type 1 diabetes
-    criteria["Diabetes Type 1"] = ("type 1" in primary_diag and "diabetes" in primary_diag)
-    
-    # 2. Check for evidence of CSII usage (for example, by looking for 'insulin pump' or 'csii' keywords)
-    criteria["CSII Usage"] = ("insulin pump" in prescription or "csii" in prescription)
-    
-    # 3. Check for evidence of closed-loop device usage (look for 'closed-loop' or 'closed loop')
-    criteria["Closed-Loop Device"] = ("closed-loop" in prescription or "closed loop" in prescription)
-    
-    # Calculate inclusion percentage based on available inclusion criteria.
-    inclusion_count = sum(criteria.values())
-    total_inclusion_criteria = len(criteria)
-    inclusion_percentage = (inclusion_count / total_inclusion_criteria) * 100 if total_inclusion_criteria > 0 else 0
-    
-    # Exclusion check:
-    exclusions = {}
-    # For example, if the prescription or primary diagnosis mentions pregnancy, mark it as an exclusion.
-    exclusions["Pregnancy"] = ("pregnancy" in primary_diag or "pregnancy" in prescription)
-    
-    exclusion_count = sum(exclusions.values())
-    total_exclusion_criteria = len(exclusions)
-    exclusion_percentage = (exclusion_count / total_exclusion_criteria) * 100 if total_exclusion_criteria > 0 else 0
+# Define trial inclusion and exclusion criteria
+INCLUSION_CRITERIA = {
+    "Condition": "Diabetes type 1",
+    "CSII_Usage_Months": 6,
+    "HbA1c_Max": 11,
+    "CGM_Usage_Months": 6,
+    "Device": "Tandem t:slim X2"
+}
 
-    return inclusion_percentage, exclusion_percentage, criteria, exclusions
+EXCLUSION_CRITERIA = [
+    "Pregnancy or Lactation",
+    "Uncontrolled diabetic retinopathy",
+    "Disease affecting glucose metabolism"
+]
+
+def check_eligibility(patient_data):
+    """Check patient eligibility based on inclusion/exclusion criteria."""
+    inclusion_checks = {
+        "Condition": patient_data.get("Condition") == INCLUSION_CRITERIA["Condition"],
+        "CSII Usage": patient_data.get("CSII_Usage_Months", 0) >= INCLUSION_CRITERIA["CSII_Usage_Months"],
+        "HbA1c": patient_data.get("HbA1c", 0) <= INCLUSION_CRITERIA["HbA1c_Max"],
+        "CGM Usage": patient_data.get("CGM_Usage_Months", 0) >= INCLUSION_CRITERIA["CGM_Usage_Months"],
+        "Device": patient_data.get("Device") == INCLUSION_CRITERIA["Device"]
+    }
+    
+    exclusion_checks = [exclusion in patient_data.get("Exclusions", "") for exclusion in EXCLUSION_CRITERIA]
+    
+    inclusion_percentage = sum(inclusion_checks.values()) / len(inclusion_checks) * 100
+    exclusion_percentage = sum(exclusion_checks) / len(EXCLUSION_CRITERIA) * 100
+    
+    return inclusion_percentage, exclusion_percentage
 
 # Streamlit UI
 st.title("Clinical Trial Eligibility Checker")
 
 uploaded_file = st.file_uploader("Upload Patient Data (CSV)", type=["csv"])
 if uploaded_file:
-    try:
-        df = pd.read_csv(uploaded_file)
-    except Exception as e:
-        st.error(f"Error reading CSV file: {e}")
-    
+    df = pd.read_csv(uploaded_file)
     st.write("Data Preview:", df.head())
 
-    # Check if the CSV has the required "Patient" column
-    if "Patient" not in df.columns:
-        st.error(f"CSV file is missing a 'Patient' column. Available columns: {', '.join(df.columns)}")
-    else:
-        patient_name = st.text_input("Enter Patient Name:")
-        if patient_name:
-            patient_row = df[df["Patient"] == patient_name]
+    patient_name = st.text_input("Enter Patient Name:")
+    if patient_name:
+        patient_row = df[df["Name"] == patient_name]
+        
+        if not patient_row.empty:
+            patient_data = patient_row.iloc[0].to_dict()
+            inclusion_pct, exclusion_pct = check_eligibility(patient_data)
             
-            if not patient_row.empty:
-                patient_data = patient_row.iloc[0].to_dict()
-                st.write("Patient Details:")
-                st.json(patient_data)
-                
-                inclusion_pct, exclusion_pct, inclusion_checks, exclusion_checks = check_eligibility(patient_data)
-                
-                st.write(f"*Inclusion Percentage:* {inclusion_pct:.2f}%")
-                st.write(f"*Exclusion Percentage:* {exclusion_pct:.2f}%")
-                
-                st.write("### Inclusion Criteria Checks")
-                for crit, passed in inclusion_checks.items():
-                    st.write(f"- *{crit}:* {'Passed' if passed else 'Not passed'}")
-                
-                st.write("### Exclusion Criteria Checks")
-                for crit, failed in exclusion_checks.items():
-                    st.write(f"- *{crit}:* {'Found (Not eligible)' if failed else 'Not found'}")
-                
-                # Determine eligibility based on the adapted logic:
-                if inclusion_pct >= 50 and exclusion_pct == 0:
-                    st.success("Patient is likely eligible for the trial.")
-                else:
-                    st.error("Patient may not qualify for the trial.")
+            st.write(f"*Inclusion Percentage:* {inclusion_pct:.2f}%")
+            st.write(f"*Exclusion Percentage:* {exclusion_pct:.2f}%")
+            
+            if inclusion_pct >= 50 and exclusion_pct == 0:
+                st.success("Patient is likely eligible for the trial.")
             else:
-                st.warning("Patient not found in the dataset.")
+                st.error("Patient may not qualify for the trial.")
+        else:
+            st.warning("Patient not found in the dataset.")
