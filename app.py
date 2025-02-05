@@ -45,43 +45,50 @@ uploaded_file = st.file_uploader("Upload a CSV file", type=["csv"])
 
 if uploaded_file:
     df = pd.read_csv(uploaded_file)
+    df.columns = df.columns.str.strip().str.lower()  # Normalize column names
     
-    st.write("Dataset Preview:", df.head())
+    required_columns = {"patientname", "patientid", "primarydiag", "nctid"}
+    missing_columns = required_columns - set(df.columns)
+    
+    if missing_columns:
+        st.error(f"Missing required columns in CSV: {', '.join(missing_columns)}")
+    else:
+        st.write("Dataset Preview:", df.head())
 
-    # Search by Patient Name or ID
-    patient_search = st.text_input("Enter Patient Name or ID")
-    
-    if patient_search:
-        matching_patients = df[(df["PatientName"].str.contains(patient_search, case=False, na=False)) | (df["PatientID"].astype(str) == patient_search)]
+        # Search by Patient Name or ID
+        patient_search = st.text_input("Enter Patient Name or ID")
         
-        if not matching_patients.empty:
-            patient_id = matching_patients.iloc[0]["PatientID"]
-            disease_name = matching_patients.iloc[0]["PrimaryDiag"]
-            nct_id = str(matching_patients.iloc[0]["NCTID"])
+        if patient_search:
+            matching_patients = df[(df["patientname"].str.contains(patient_search, case=False, na=False)) | (df["patientid"].astype(str) == patient_search)]
             
-            st.write(f"**Patient ID:** {patient_id}")
-            st.write(f"**Disease Name:** {disease_name}")
-            
-            if pd.isna(nct_id) or nct_id.strip() == "":
-                st.error("No NCT ID found for this patient.")
+            if not matching_patients.empty:
+                patient_id = matching_patients.iloc[0]["patientid"]
+                disease_name = matching_patients.iloc[0]["primarydiag"]
+                nct_id = str(matching_patients.iloc[0]["nctid"])
+                
+                st.write(f"**Patient ID:** {patient_id}")
+                st.write(f"**Disease Name:** {disease_name}")
+                
+                if pd.isna(nct_id) or nct_id.strip() == "":
+                    st.error("No NCT ID found for this patient.")
+                else:
+                    st.write(f"Fetching criteria for **NCT ID: {nct_id}**")
+                    inclusion_text, exclusion_text, inclusion, exclusion = fetch_eligibility_criteria(nct_id)
+                    
+                    st.subheader("Inclusion Criteria")
+                    if inclusion:
+                        for point in inclusion:
+                            st.write(f"✅ {point}")
+                    else:
+                        st.warning("No inclusion criteria found.")
+                    
+                    st.subheader("Exclusion Criteria")
+                    if exclusion:
+                        for point in exclusion:
+                            st.write(f"❌ {point}")
+                    else:
+                        st.warning("No exclusion criteria found.")
+                    
+                    st.markdown(f"[View Full Study Details](https://clinicaltrials.gov/study/{nct_id}#participation-criteria)", unsafe_allow_html=True)
             else:
-                st.write(f"Fetching criteria for **NCT ID: {nct_id}**")
-                inclusion_text, exclusion_text, inclusion, exclusion = fetch_eligibility_criteria(nct_id)
-                
-                st.subheader("Inclusion Criteria")
-                if inclusion:
-                    for point in inclusion:
-                        st.write(f"✅ {point}")
-                else:
-                    st.warning("No inclusion criteria found.")
-                
-                st.subheader("Exclusion Criteria")
-                if exclusion:
-                    for point in exclusion:
-                        st.write(f"❌ {point}")
-                else:
-                    st.warning("No exclusion criteria found.")
-                
-                st.markdown(f"[View Full Study Details](https://clinicaltrials.gov/study/{nct_id}#participation-criteria)", unsafe_allow_html=True)
-        else:
-            st.error("No matching patient found.")
+                st.error("No matching patient found.")
