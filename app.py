@@ -14,25 +14,25 @@ def fetch_eligibility_criteria(nct_id):
     
     soup = BeautifulSoup(response.text, "html.parser")
     
-    # Debug: Print the HTML content to check if it contains the expected sections
-    # st.write(soup.prettify())  # Uncomment this line to see the raw HTML
-    
     # Find the participation criteria section
     criteria_section = soup.find("div", {"id": "participation-criteria"})
     if not criteria_section:
         return "No eligibility criteria found", []
     
-    # Extract inclusion and exclusion criteria
+    # Extract the entire raw text for inclusion and exclusion criteria
     criteria_text = criteria_section.get_text("\n").split("Exclusion Criteria:")
     
-    inclusion_criteria = criteria_text[0].replace("Inclusion Criteria:", "").strip().split("\n") if "Inclusion Criteria:" in criteria_text[0] else []
-    exclusion_criteria = criteria_text[1].strip().split("\n") if len(criteria_text) > 1 else []
-    
-    # Clean up empty lines and any non-relevant text
-    inclusion_criteria = [x.strip() for x in inclusion_criteria if x.strip()]
-    exclusion_criteria = [x.strip() for x in exclusion_criteria if x.strip()]
+    # Raw text before splitting into points
+    inclusion_section = criteria_text[0].replace("Inclusion Criteria:", "").strip()
+    exclusion_section = criteria_text[1].strip() if len(criteria_text) > 1 else ""
 
-    return inclusion_criteria, exclusion_criteria
+    # Handle Inclusion Criteria text extraction
+    inclusion_criteria = [line.strip() for line in inclusion_section.split("\n") if line.strip()]
+    
+    # Handle Exclusion Criteria text extraction
+    exclusion_criteria = [line.strip() for line in exclusion_section.split("\n") if line.strip()]
+    
+    return inclusion_section, exclusion_section, inclusion_criteria, exclusion_criteria
 
 # Streamlit UI
 st.title("Clinical Trial Eligibility Checker")
@@ -59,9 +59,16 @@ if uploaded_file:
             st.error("No NCT ID found for this patient.")
         else:
             st.write(f"Fetching criteria for **NCT ID: {nct_id}**")
-            inclusion, exclusion = fetch_eligibility_criteria(nct_id)
+            inclusion_text, exclusion_text, inclusion, exclusion = fetch_eligibility_criteria(nct_id)
 
-            # Display results
+            # Display raw parsed text before points
+            st.subheader("Raw Inclusion Criteria Text")
+            st.write(inclusion_text)
+            
+            st.subheader("Raw Exclusion Criteria Text")
+            st.write(exclusion_text)
+
+            # Display results as bullet points
             st.subheader("Inclusion Criteria")
             if inclusion:
                 for point in inclusion:
