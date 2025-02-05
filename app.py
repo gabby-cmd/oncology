@@ -17,22 +17,26 @@ def fetch_eligibility_criteria(nct_id):
     # Find the participation criteria section
     criteria_section = soup.find("div", {"id": "participation-criteria"})
     if not criteria_section:
-        return "No eligibility criteria found", []
-    
-    # Extract the entire raw text for inclusion and exclusion criteria
-    criteria_text = criteria_section.get_text("\n").split("Exclusion Criteria:")
-    
-    # Raw text before splitting into points
-    inclusion_section = criteria_text[0].replace("Inclusion Criteria:", "").strip()
-    exclusion_section = criteria_text[1].strip() if len(criteria_text) > 1 else ""
+        return "No eligibility criteria found", [], []
 
-    # Handle Inclusion Criteria text extraction
-    inclusion_criteria = [line.strip() for line in inclusion_section.split("\n") if line.strip()]
-    
-    # Handle Exclusion Criteria text extraction
-    exclusion_criteria = [line.strip() for line in exclusion_section.split("\n") if line.strip()]
-    
-    return inclusion_section, exclusion_section, inclusion_criteria, exclusion_criteria
+    # Extract the entire raw text for inclusion and exclusion criteria
+    criteria_text = criteria_section.get_text("\n")
+
+    # Split the raw criteria text into inclusion and exclusion parts
+    if "Inclusion Criteria:" in criteria_text:
+        inclusion_start = criteria_text.index("Inclusion Criteria:") + len("Inclusion Criteria:")
+        exclusion_start = criteria_text.index("Exclusion Criteria:") if "Exclusion Criteria:" in criteria_text else len(criteria_text)
+
+        inclusion_text = criteria_text[inclusion_start:exclusion_start].strip()
+        exclusion_text = criteria_text[exclusion_start:].strip()
+    else:
+        inclusion_text, exclusion_text = "", ""
+
+    # Clean up inclusion and exclusion sections
+    inclusion_criteria = [line.strip() for line in inclusion_text.split("\n") if line.strip()]
+    exclusion_criteria = [line.strip() for line in exclusion_text.split("\n") if line.strip()]
+
+    return inclusion_text, exclusion_text, inclusion_criteria, exclusion_criteria
 
 # Streamlit UI
 st.title("Clinical Trial Eligibility Checker")
