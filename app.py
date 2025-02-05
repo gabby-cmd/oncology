@@ -26,10 +26,12 @@ def check_eligibility(patient_data):
         "Device": patient_data.get("Device") == INCLUSION_CRITERIA["Device"]
     }
     
-    # Handle exclusions - split the Exclusions column into a list if it contains commas
+    # Handle exclusions - check if 'Exclusions' is a string before splitting
     exclusions = patient_data.get("Exclusions", "")
-    exclusion_list = [exclusion.strip() for exclusion in exclusions.split(",")] if exclusions else []
-
+    exclusion_list = []
+    if isinstance(exclusions, str):  # Only split if it's a string
+        exclusion_list = [exclusion.strip() for exclusion in exclusions.split(",")]
+    
     # Check if any exclusion matches the defined exclusion criteria
     exclusion_checks = [exclusion in exclusion_list for exclusion in EXCLUSION_CRITERIA]
     
