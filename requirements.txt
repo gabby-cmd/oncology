@@ -1,9 +1,3 @@
 streamlit
-PyPDF2
-gTTS
-streamlit
-requests
-beautifulsoup4
-matplotlib
 pandas
 json
