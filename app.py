@@ -1,96 +1,148 @@
-import streamlit as st
+[7:15 PM, 2/4/2025] michu 🐩: import streamlit as st
 import pandas as pd
-import requests
-import matplotlib.pyplot as plt
+import json
 
-# Function to fetch inclusion/exclusion criteria from clinicaltrials.gov API
-def fetch_trial_criteria(nct_id):
-    # Construct API URL
-    url = f'https://api.clinicaltrials.gov/v1/studies/{nct_id}'
-    
-    # Send GET request to fetch data
-    response = requests.get(url)
-    
-    if response.status_code == 200:
-        trial_data = response.json()
-        inclusion_criteria = trial_data.get('inclusionCriteria', 'No inclusion criteria found')
-        exclusion_criteria = trial_data.get('exclusionCriteria', 'No exclusion criteria found')
-        return inclusion_criteria, exclusion_criteria
-    else:
-        return None, None
-
-# Function to check if the patient's data matches inclusion/exclusion criteria
-def check_inclusion_exclusion(patient_data, criteria_data):
-    inclusion_count = 0
-    exclusion_count = 0
-    total_trials = len(criteria_data)
-
-    # Loop through each patient and compare with trial criteria
-    for _, patient_row in patient_data.iterrows():
-        for _, criteria_row in criteria_data.iterrows():
-            nct_id = criteria_row['NCT ID']
-            inclusion_criteria, exclusion_criteria = fetch_trial_criteria(nct_id)
-            
-            if inclusion_criteria and exclusion_criteria:
-                # Combine inclusion and exclusion criteria
-                patient_diag = patient_row['Primarydiag'] + " " + str(patient_row['SecondaryDiag'])
-                
-                # Inclusion check
-                if any(keyword.lower() in patient_diag.lower() for keyword in inclusion_criteria.split(";")):
-                    inclusion_count += 1
-
-                # Exclusion check
-                if any(keyword.lower() in patient_diag.lower() for keyword in exclusion_criteria.split(";")):
-                    exclusion_count += 1
-
-    inclusion_percentage = (inclusion_count / total_trials) * 100 if total_trials else 0
-    exclusion_percentage = (exclusion_count / total_trials) * 100 if total_trials else 0
-    return inclusion_percentage, exclusion_percentage
+# Load clinical trial data (replace this with actual data retrieval)
+clinical_trial_data = {
+    "nctId": "NCT04939766",
+    "title": "Impact of the Use of a Closed-loop Insulin Therapy on the Burden of Diabetes and the Quality of Life",
+    "sponsor": "VitalAire",
+    "eligibilityCriteria": {
+        "inclusion": [
+            "Type 1 diabetic patients undergoing a CSII therapy for at least 6 months",
+            "Using Tandem t:slim X2 for at least 4 weeks",
+            "Using CGM for 6 months including Dexcon G6 for at least 4 weeks",
+            "Eligible according to French Society recommendations",
+            "HbA1c below 11%"
+        ],
+        "exclusion": [
+            "Pregnancy or lactation",
+            "Diabetic retinopathy not controlled by laser",
+            "Disease or treatment altering glucose metabolism"
+        ]
+    }
+}
 
 # Streamlit UI
-st.title("Patient Eligibility for Clinical Trials")
+st.title("Clinical Trial Eligibility Checker")
+st.write("Upload a CSV file containing patient data and input a patient’s name to check their eligibility.")
 
-# File Uploads
-sample_data = st.file_uploader("Upload the sample data CSV", type=["csv"])
-master_file = st.file_uploader("Upload the master file CSV", type=["csv"])
+# File uploader
+uploaded_file = st.file_uploader("Upload Patient Data (CSV)", type="csv")
 
-if sample_data and master_file:
-    # Load CSV files
-    patient_data = pd.read_csv(sample_data)
-    criteria_data = pd.read_csv(master_file)
+if uploaded_file:
+    df = pd.read_csv(uploaded_file)
+    st.write("Patient Data Preview:")
+    st.dataframe(df)
 
-    st.write("Sample Data:")
-    st.dataframe(patient_data.head())
-
-    st.write("Master File Data (Clinical Trial Criteria):")
-    st.dataframe(criteria_data.head())
-
-    # Input patient name for selection
-    patient_name = st.text_input("Enter Patient Name to check eligibility:")
+    # Input patient name
+    patient_name = st.text_input("Enter Patient Name:")
 
     if patient_name:
-        # Filter data based on patient name
-        selected_patient = patient_data[patient_data['Patient'].str.contains(patient_name, case=False, na=False)]
-        
-        if not selected_patient.empty:
-            st.write(f"Selected Patient: {patient_name}")
-            st.write(selected_patient)
+        # Find patient data
+        patient_row = df[df['Name'] == patient_name]
 
-            # Analyze eligibility based on clinicaltrials.gov inclusion/exclusion criteria
-            inclusion_percentage, exclusion_percentage = check_inclusion_exclusion(selected_patient, criteria_data)
+        if not patient_row.empty:
+            st.write(f"Details for {patient_name}:")
+            st.write(patient_row)
 
-            # Display Results
+            # Extract patient criteria
+            patient_criteria = {
+                "diabetes_type": "Type 1" in patient_row["Condition"].values[0],
+                "csii_usage": patient_row["CSII_Usage_Months"].values[0] >= 6,
+                "tandem_usage": patient_row["Tandem_Usage_Weeks"].values[0] >= 4,
+                "cgm_usage": patient_row["CGM_Usage_Months"].values[0] >= 6 and "Dexcom G6" in patient_row["CGM_Type"].values[0],
+                "hba1c": patient_row["HbA1c"].values[0] < 11,
+                "pregnancy": patient_row["Pregnant"].values[0] == "No",
+                "retinopathy": patient_row["Retinopathy_Controlled"].values[0] == "Yes",
+                "glucose_altering_disease": patient_row["Glucose_Altering_Disease"].values[0] == "No"
+            }
+
+            # Calculate inclusion/exclusion percentage
+            inclusion_matches = sum([
+                patient_criteria["diabetes_type"],
+                patient_criteria["csii_usage"],
+                patient_criteria["tandem_usage"],
+                patient_criteria["cgm_usage"],
+                patient_criteria["hba1c"]
+            ])
+            exclusion_matches = sum([
+                not patient_criteria["pregnancy"],
+                not patient_criteria["retinopathy"],
+                not patient_criteria["glucose_altering_disease"]
+            ])
+
+            total_criteria = len(patient_criteria)
+            inclusion_percentage = (inclusion_matches / total_criteria) * 100
+            exclusion_percentage = (exclusion_matches / total_criteria) * 100
+
             st.write(f"Inclusion Percentage: {inclusion_percentage:.2f}%")
             st.write(f"Exclusion Percentage: {exclusion_percentage:.2f}%")
 
-            # Show Results in a Chart
-            labels = ['Inclusion', 'Exclusion']
-            values = [inclusion_percentage, exclusion_percentage]
-
-            fig, ax = plt.subplots()
-            ax.pie(values, labels=labels, autopct='%1.1f%%', startangle=90)
-            ax.axis('equal')  # Equal aspect ratio ensures the pie chart is circular.
-            st.pyplot(fig)
+            if inclusion_percentage > 50 and exclusion_percentage == 0:
+                st.success(f"{patient_name} is likely eligible for the clinical trial.")
+            else:
+                st.warning(f"{patient_name} may not be eligible based on the provided criteria.")
 
         else:
-            st.warning("Patient not found in the sample data.")
+            st.error("Patient not found in the uploaded file.")
+[7:21 PM, 2/4/2025] michu 🐩: import streamlit as st
+import pandas as pd
+
+# Define trial inclusion and exclusion criteria
+INCLUSION_CRITERIA = {
+    "Condition": "Diabetes type 1",
+    "CSII_Usage_Months": 6,
+    "HbA1c_Max": 11,
+    "CGM_Usage_Months": 6,
+    "Device": "Tandem t:slim X2"
+}
+
+EXCLUSION_CRITERIA = [
+    "Pregnancy or Lactation",
+    "Uncontrolled diabetic retinopathy",
+    "Disease affecting glucose metabolism"
+]
+
+def check_eligibility(patient_data):
+    """Check patient eligibility based on inclusion/exclusion criteria."""
+    inclusion_checks = {
+        "Condition": patient_data.get("Condition") == INCLUSION_CRITERIA["Condition"],
+        "CSII Usage": patient_data.get("CSII_Usage_Months", 0) >= INCLUSION_CRITERIA["CSII_Usage_Months"],
+        "HbA1c": patient_data.get("HbA1c", 0) <= INCLUSION_CRITERIA["HbA1c_Max"],
+        "CGM Usage": patient_data.get("CGM_Usage_Months", 0) >= INCLUSION_CRITERIA["CGM_Usage_Months"],
+        "Device": patient_data.get("Device") == INCLUSION_CRITERIA["Device"]
+    }
+    
+    exclusion_checks = [exclusion in patient_data.get("Exclusions", "") for exclusion in EXCLUSION_CRITERIA]
+    
+    inclusion_percentage = sum(inclusion_checks.values()) / len(inclusion_checks) * 100
+    exclusion_percentage = sum(exclusion_checks) / len(EXCLUSION_CRITERIA) * 100
+    
+    return inclusion_percentage, exclusion_percentage
+
+# Streamlit UI
+st.title("Clinical Trial Eligibility Checker")
+
+uploaded_file = st.file_uploader("Upload Patient Data (CSV)", type=["csv"])
+if uploaded_file:
+    df = pd.read_csv(uploaded_file)
+    st.write("Data Preview:", df.head())
+
+    patient_name = st.text_input("Enter Patient Name:")
+    if patient_name:
+        patient_row = df[df["Name"] == patient_name]
+        
+        if not patient_row.empty:
+            patient_data = patient_row.iloc[0].to_dict()
+            inclusion_pct, exclusion_pct = check_eligibility(patient_data)
+            
+            st.write(f"*Inclusion Percentage:* {inclusion_pct:.2f}%")
+            st.write(f"*Exclusion Percentage:* {exclusion_pct:.2f}%")
+            
+            if inclusion_pct >= 50 and exclusion_pct == 0:
+                st.success("Patient is likely eligible for the trial.")
+            else:
+                st.error("Patient may not qualify for the trial.")
+        else:
+            st.warning("Patient not found in the dataset.")
