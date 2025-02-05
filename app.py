@@ -9,33 +9,40 @@ def fetch_eligibility_criteria(nct_id):
     headers = {"User-Agent": "Mozilla/5.0"}
     
     response = requests.get(url, headers=headers)
+    
     if response.status_code != 200:
-        return "Error fetching data", "", [], []
+        return f"Error fetching data (Status code: {response.status_code})", "", [], []
     
     soup = BeautifulSoup(response.text, "html.parser")
     
+    # Debugging: Print the full page text to see what is being fetched
+    print(soup.prettify()[:2000])  # Print first 2000 characters to check structure
+    
     # Find the participation criteria section
     criteria_section = soup.find("div", {"id": "participation-criteria"})
+    
     if not criteria_section:
-        return "No eligibility criteria found", "", [], []
+        return "No eligibility criteria section found", "", [], []
 
-    # Extract the entire raw text for inclusion and exclusion criteria
-    criteria_text = criteria_section.get_text("\n")
+    # Debugging: Print extracted text
+    print("\nExtracted Participation Criteria Section:\n", criteria_section.get_text("\n"))
 
-    # Split the raw criteria text into inclusion and exclusion parts
+    # Extract the entire raw text
+    criteria_text = criteria_section.get_text("\n").strip()
+
+    # Ensure inclusion and exclusion criteria are properly parsed
     inclusion_text = ""
     exclusion_text = ""
     inclusion_criteria = []
     exclusion_criteria = []
 
-    if "Inclusion Criteria:" in criteria_text:
-        inclusion_start = criteria_text.index("Inclusion Criteria:") + len("Inclusion Criteria:")
-        exclusion_start = criteria_text.index("Exclusion Criteria:") if "Exclusion Criteria:" in criteria_text else len(criteria_text)
+    if "Inclusion Criteria" in criteria_text:
+        inclusion_start = criteria_text.index("Inclusion Criteria") + len("Inclusion Criteria")
+        exclusion_start = criteria_text.index("Exclusion Criteria") if "Exclusion Criteria" in criteria_text else len(criteria_text)
 
         inclusion_text = criteria_text[inclusion_start:exclusion_start].strip()
-        exclusion_text = criteria_text[exclusion_start:].strip()
+        exclusion_text = criteria_text[exclusion_start:].strip() if "Exclusion Criteria" in criteria_text else ""
 
-        # Clean up inclusion and exclusion sections
         inclusion_criteria = [line.strip() for line in inclusion_text.split("\n") if line.strip()]
         exclusion_criteria = [line.strip() for line in exclusion_text.split("\n") if line.strip()]
 
@@ -70,10 +77,10 @@ if uploaded_file:
 
             # Display raw parsed text before points
             st.subheader("Raw Inclusion Criteria Text")
-            st.write(inclusion_text)
-            
+            st.write(inclusion_text if inclusion_text else "No inclusion criteria found.")
+
             st.subheader("Raw Exclusion Criteria Text")
-            st.write(exclusion_text)
+            st.write(exclusion_text if exclusion_text else "No exclusion criteria found.")
 
             # Display results as bullet points
             st.subheader("Inclusion Criteria")
