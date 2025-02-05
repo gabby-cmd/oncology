@@ -48,15 +48,15 @@ if uploaded_file:
     
     st.write("Dataset Preview:", df.head())
 
-    # Search by Patient Name
-    patient_name = st.text_input("Enter Patient Name")
+    # Search by Patient Name or ID
+    patient_search = st.text_input("Enter Patient Name or ID")
     
-    if patient_name:
-        matching_patients = df[df["PatientName"].str.contains(patient_name, case=False, na=False)]
+    if patient_search:
+        matching_patients = df[(df["PatientName"].str.contains(patient_search, case=False, na=False)) | (df["PatientID"].astype(str) == patient_search)]
         
         if not matching_patients.empty:
             patient_id = matching_patients.iloc[0]["PatientID"]
-            disease_name = matching_patients.iloc[0]["DiseaseName"]
+            disease_name = matching_patients.iloc[0]["PrimaryDiag"]
             nct_id = str(matching_patients.iloc[0]["NCTID"])
             
             st.write(f"**Patient ID:** {patient_id}")
