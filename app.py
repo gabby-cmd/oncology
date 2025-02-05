@@ -14,6 +14,9 @@ def fetch_eligibility_criteria(nct_id):
     
     soup = BeautifulSoup(response.text, "html.parser")
     
+    # Debug: Print the HTML content to check if it contains the expected sections
+    # st.write(soup.prettify())  # Uncomment this line to see the raw HTML
+    
     # Find the participation criteria section
     criteria_section = soup.find("div", {"id": "participation-criteria"})
     if not criteria_section:
@@ -25,6 +28,10 @@ def fetch_eligibility_criteria(nct_id):
     inclusion_criteria = criteria_text[0].replace("Inclusion Criteria:", "").strip().split("\n") if "Inclusion Criteria:" in criteria_text[0] else []
     exclusion_criteria = criteria_text[1].strip().split("\n") if len(criteria_text) > 1 else []
     
+    # Clean up empty lines and any non-relevant text
+    inclusion_criteria = [x.strip() for x in inclusion_criteria if x.strip()]
+    exclusion_criteria = [x.strip() for x in exclusion_criteria if x.strip()]
+
     return inclusion_criteria, exclusion_criteria
 
 # Streamlit UI
