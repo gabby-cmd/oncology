@@ -17,34 +17,10 @@ criteria_display = st.empty()
 def display_patient_data(patient_name, df):
     # Filter patient data based on the input name
     patient_data = df[df['Patient'].str.contains(patient_name, case=False, na=False)]
-    
+
     if patient_data.empty:
         st.write(f"No patient found with the name {patient_name}.")
-    else:
-        st.write(f"Patient Data: {patient_data}")
-     …
-[8:40 PM, 2/4/2025] michu 🐩: import streamlit as st
-import pandas as pd
-import requests
-import xml.etree.ElementTree as ET
-
-# Streamlit UI to upload CSV
-st.title("Oncology Clinical Trial Inclusion/Exclusion Criteria")
-st.sidebar.header("Upload your patient dataset")
-
-# File uploader
-uploaded_file = st.sidebar.file_uploader("Upload Patient CSV", type=["csv"])
-
-# Placeholder for displaying criteria
-criteria_display = st.empty()
-
-# Patient Data logic
-def display_patient_data(patient_name, df):
-    # Filter patient data based on the input name
-    patient_data = df[df['Patient'].str.contains(patient_name, case=False, na=False)]
-    
-    if patient_data.empty:
-        st.write(f"No patient found with the name {patient_name}.")
+        return None
     else:
         st.write(f"Patient Data: {patient_data}")
         return patient_data
@@ -63,15 +39,18 @@ def fetch_clinical_trial_criteria(condition):
         inclusion_criteria = None
         exclusion_criteria = None
 
-        # Find the relevant sections in the XML (these tags may vary, you need to inspect the XML structure)
+        # Find the relevant sections in the XML (these tags may vary, inspect the XML structure)
         for study in root.iter('clinical_study'):
             for arm in study.iter('arm_group'):
                 if arm.find('arm_group_label') is not None:
                     arm_label = arm.find('arm_group_label').text
-                    if 'Inclusion' in arm_label:
-                        inclusion_criteria = arm.find('description').text
-                    elif 'Exclusion' in arm_label:
-                        exclusion_criteria = arm.find('description').text
+                    description = arm.find('description')
+                    
+                    if description is not None:
+                        if 'Inclusion' in arm_label:
+                            inclusion_criteria = description.text
+                        elif 'Exclusion' in arm_label:
+                            exclusion_criteria = description.text
 
         # Return the criteria if found
         return {
@@ -96,8 +75,8 @@ if uploaded_file is not None:
     if patient_name:
         patient_data = display_patient_data(patient_name, df)
 
-        if not patient_data.empty:
-            # Assuming the diagnosis code is in the 'Primarydiag' column (adjust accordingly)
+        if patient_data is not None and not patient_data.empty:
+            # Assuming the diagnosis code is in the 'Primarydiag' column
             condition = patient_data['Primarydiag'].iloc[0]  # Modify this logic based on your dataset
             st.write(f"Patient's Condition (Primary Diagnosis): {condition}")
             
@@ -115,12 +94,12 @@ if uploaded_file is not None:
             exclusion_criteria = criteria['exclusion']
             
             # Example logic to compare
-            if inclusion_criteria and inclusion_criteria.lower() in patient_data['Primarydiag'].iloc[0].lower():
-                st.write("Patient meets the inclusion criteria!")
+            if inclusion_criteria and inclusion_criteria.lower() in condition.lower():
+                st.write("✅ Patient meets the inclusion criteria!")
             else:
-                st.write("Patient does not meet the inclusion criteria.")
+                st.write("❌ Patient does not meet the inclusion criteria.")
             
-            if exclusion_criteria and exclusion_criteria.lower() in patient_data['Primarydiag'].iloc[0].lower():
-                st.write("Patient meets the exclusion criteria!")
+            if exclusion_criteria and exclusion_criteria.lower() in condition.lower():
+                st.write("❌ Patient meets the exclusion criteria!")
             else:
-                st.write("Patient does not meet the exclusion criteria.")
+                st.write("✅ Patient does not meet the exclusion criteria.")
