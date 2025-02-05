@@ -26,7 +26,12 @@ def check_eligibility(patient_data):
         "Device": patient_data.get("Device") == INCLUSION_CRITERIA["Device"]
     }
     
-    exclusion_checks = [exclusion in patient_data.get("Exclusions", "") for exclusion in EXCLUSION_CRITERIA]
+    # Handle exclusions - split the Exclusions column into a list if it contains commas
+    exclusions = patient_data.get("Exclusions", "")
+    exclusion_list = [exclusion.strip() for exclusion in exclusions.split(",")] if exclusions else []
+
+    # Check if any exclusion matches the defined exclusion criteria
+    exclusion_checks = [exclusion in exclusion_list for exclusion in EXCLUSION_CRITERIA]
     
     inclusion_percentage = sum(inclusion_checks.values()) / len(inclusion_checks) * 100
     exclusion_percentage = sum(exclusion_checks) / len(EXCLUSION_CRITERIA) * 100
